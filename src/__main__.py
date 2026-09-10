@@ -124,6 +124,131 @@ class CodeEditor(ctk.CTkTextbox):
                 self._textbox.tag_add(str(t), start_index, f"{line}.{col}")
 
 
+
+# idk random music playing vibecoding larp feature
+
+import os
+import threading
+import time
+from tkinter import filedialog
+import customtkinter as ctk
+import pygame
+
+class MusicPlayer(ctk.CTkFrame):
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+        
+        # Initialize pygame mixer for audio handling
+        pygame.mixer.init()
+        
+        self.playlist = []
+        self.current_index = 0
+        self.is_playing = False
+        
+        # --- UI Components ---
+        self.lbl_status = ctk.CTkLabel(self, text="No Track Loaded", font=("Arial", 12, "bold"))
+        self.lbl_status.pack(pady=5)
+        
+        btn_frame = ctk.CTkFrame(self, fg_color="transparent")
+        btn_frame.pack(pady=5)
+        
+        ctk.CTkButton(btn_frame, text="📁 Load", width=60, command=self.load_folder).pack(side="left", padx=2)
+        ctk.CTkButton(btn_frame, text="⏮", width=40, command=self.prev_track).pack(side="left", padx=2)
+        
+        self.btn_play = ctk.CTkButton(btn_frame, text="▶ Play", width=60, command=self.toggle_play)
+        self.btn_play.pack(side="left", padx=2)
+        
+        ctk.CTkButton(btn_frame, text="⏭", width=40, command=self.next_track).pack(side="left", padx=2)
+        
+        # Start a background thread to check for track endings and handle playlist auto-advance
+        threading.Thread(target=self._playlist_monitor, daemon=True).start()
+
+    def load_folder(self):
+        folder = filedialog.askdirectory(title="Select Music Folder")
+        if not folder:
+            return
+            
+        # Supported audio formats
+        extensions = (".mp3", ".wav", ".ogg", ".flac")
+        self.playlist = [
+            os.path.join(folder, f) for f in os.listdir(folder) 
+            if f.lower().endswith(extensions)
+        ]
+        
+        if self.playlist:
+            self.playlist.sort()
+            self.current_index = 0
+            self.is_playing = False
+            pygame.mixer.music.stop()
+            self._update_ui_track_name()
+        else:
+            self.lbl_status.configure(text="No audio files found!")
+
+    def play_track(self):
+        if not self.playlist:
+            return
+        try:
+            pygame.mixer.music.load(self.playlist[self.current_index])
+            pygame.mixer.music.play()
+            self.is_playing = True
+            self.btn_play.configure(text="⏸ Pause")
+            self._update_ui_track_name()
+        except Exception as e:
+            self.lbl_status.configure(text=f"Error playing file")
+
+    def toggle_play(self):
+        if not self.playlist:
+            return
+        if self.is_playing:
+            pygame.mixer.music.pause()
+            self.is_playing = False
+            self.btn_play.configure(text="▶ Play")
+        else:
+            # If a song was paused, unpause it; otherwise, play fresh
+            if pygame.mixer.music.get_pos() > 0:
+                pygame.mixer.music.unpause()
+                self.is_playing = True
+                self.btn_play.configure(text="⏸ Pause")
+            else:
+                self.play_track()
+
+    def next_track(self):
+        if self.playlist:
+            self.current_index = (self.current_index + 1) % len(self.playlist)
+            self.play_track()
+
+    def prev_track(self):
+        if self.playlist:
+            self.current_index = (self.current_index - 1) % len(self.playlist)
+            self.play_track()
+
+    def _update_ui_track_name(self):
+        filename = os.path.basename(self.playlist[self.current_index])
+        # Truncate string if it's too long for the sidebar panel
+        display_name = filename if len(filename) < 25 else filename[:22] + "..."
+        self.lbl_status.configure(text=display_name)
+
+    def _playlist_monitor(self):
+        """ Runs in a background thread to check if a song finished """
+        while True:
+            time.sleep(1)
+            # If the state should be playing, but the mixer finished the track
+            if self.is_playing and not pygame.mixer.music.get_busy():
+                # Safe GUI update scheduling via Tkinter
+                self.after(0, self.next_track)
+
+
+
+
+
+
+
+
+
+
+
+
+
 # ==========================================
 # Main IDE Window
 # ==========================================
@@ -195,6 +320,14 @@ class LarpCodeIDE(ctk.CTk):
         self.right_panel.grid(row=1, column=2, sticky="nswe", padx=2, pady=2)
         
         ctk.CTkLabel(self.right_panel, text="AI Models", font=ctk.CTkFont(weight="bold")).pack(pady=10)
+        
+        # ... (Your existing AI buttons code here) ...
+        
+        # --- Add Music Player Section Here ---
+        ctk.CTkLabel(self.right_panel, text="IDE Playlist", font=ctk.CTkFont(weight="bold")).pack(pady=(20, 10))
+        self.audio_player = MusicPlayer(self.right_panel, fg_color="transparent")
+        self.audio_player.pack(fill="x", padx=10, pady=5)
+
         
         llms = {
             "Claude": "https://claude.ai",
